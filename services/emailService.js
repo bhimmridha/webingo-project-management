@@ -1,120 +1,128 @@
-const nodemailer = require('nodemailer');
+const sgMail = require("@sendgrid/mail");
 
-const transporter = nodemailer.createTransport({
-  host: "smtp-relay.brevo.com",
-  port: '587',
-  secure: false,
-  auth: {
-    user: "a0878d001@smtp-brevo.com",
-    pass: process.env.SMTP_PASS,
-  },
-});
+sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
+/**
+ * Generic email sender
+ */
+const sendEmail = async (to, subject, html) => {
+  const msg = {
+    to,
+    from: process.env.FROM_EMAIL,
+    subject,
+    html,
+  };
+
+  try {
+    await sgMail.send(msg);
+    console.log(`Email sent to ${to}`);
+  } catch (error) {
+    console.error("SendGrid Error:", error.response?.body || error);
+    throw error;
+  }
+};
+
+/**
+ * Password Reset Email
+ */
 exports.sendPasswordResetEmail = async (to, resetToken) => {
   const resetUrl = `${process.env.CLIENT_URL}/reset-password/${resetToken}`;
 
-  const mailOptions = {
-    from: process.env.EMAIL_FROM || process.env.SMTP_USER,
-    to,
-    subject: 'Password Reset - Webingo Project Management',
-    html: `
-      <div style="font-family: 'Inter', Arial, sans-serif; max-width: 500px; margin: 0 auto; background: #1a1a2e; padding: 32px; border-radius: 12px;">
-        <h2 style="color: #6c63ff; margin-bottom: 16px;">Password Reset Request</h2>
-        <p style="color: #e8e8f0;">You requested a password reset. Click the button below to reset your password:</p>
-        <a href="${resetUrl}" style="display: inline-block; background: #6c63ff; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; margin: 16px 0; font-weight: 600;">Reset Password</a>
-        <p style="color: #a0a0b8; font-size: 12px;">This link expires in 1 hour. If you didn't request this, ignore this email.</p>
-      </div>
-    `,
-  };
+  const html = `
+    <div style="font-family: Arial; max-width:500px;margin:auto;background:#1a1a2e;padding:32px;border-radius:12px;">
+      <h2 style="color:#6c63ff;">Password Reset Request</h2>
+      <p style="color:#e8e8f0;">Click below to reset your password:</p>
+      <a href="${resetUrl}" style="display:inline-block;background:#6c63ff;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;">
+        Reset Password
+      </a>
+      <p style="color:#a0a0b8;font-size:12px;">Link expires in 1 hour.</p>
+    </div>
+  `;
 
-  await transporter.sendMail(mailOptions);
+  await sendEmail(to, "Password Reset - Webingo Project Management", html);
 };
 
+/**
+ * Invitation Email
+ */
 exports.sendInvitationEmail = async (to, inviterName, projectName, inviteLink) => {
-  const mailOptions = {
-    from: process.env.EMAIL_FROM || process.env.SMTP_USER,
-    to,
-    subject: `You're invited to ${projectName} - Webingo PM`,
-    html: `
-      <div style="font-family: 'Inter', Arial, sans-serif; max-width: 500px; margin: 0 auto; background: #1a1a2e; padding: 32px; border-radius: 12px;">
-        <h2 style="color: #6c63ff; margin-bottom: 16px;">Project Invitation</h2>
-        <p style="color: #e8e8f0;">${inviterName} invited you to join <strong>${projectName}</strong>.</p>
-        <a href="${inviteLink}" style="display: inline-block; background: #6c63ff; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; margin: 16px 0; font-weight: 600;">Accept Invitation</a>
-        <p style="color: #a0a0b8; font-size: 12px;">This invitation expires in 7 days.</p>
-      </div>
-    `,
-  };
+  const html = `
+    <div style="font-family: Arial; max-width:500px;margin:auto;background:#1a1a2e;padding:32px;border-radius:12px;">
+      <h2 style="color:#6c63ff;">Project Invitation</h2>
+      <p style="color:#e8e8f0;">${inviterName} invited you to <b>${projectName}</b>.</p>
+      <a href="${inviteLink}" style="display:inline-block;background:#6c63ff;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;">
+        Accept Invitation
+      </a>
+    </div>
+  `;
 
-  await transporter.sendMail(mailOptions);
+  await sendEmail(to, `You're invited to ${projectName}`, html);
 };
 
+/**
+ * Project Member Added Email
+ */
 exports.sendProjectMemberEmail = async (to, inviterName, projectName, role) => {
-  const mailOptions = {
-    from: process.env.EMAIL_FROM || process.env.SMTP_USER,
-    to,
-    subject: `You were added to ${projectName} - Webingo PM`,
-    html: `
-      <div style="font-family: 'Inter', Arial, sans-serif; max-width: 500px; margin: 0 auto; background: #1a1a2e; padding: 32px; border-radius: 12px;">
-        <h2 style="color: #6c63ff; margin-bottom: 16px;">Project Access Granted</h2>
-        <p style="color: #e8e8f0;">${inviterName} has added you to <strong>${projectName}</strong> as <strong>${role}</strong>.</p>
-        <p style="color: #a0a0b8; font-size: 12px;">You can sign in and start collaborating now.</p>
-      </div>
-    `,
-  };
+  const html = `
+    <div style="font-family: Arial; max-width:500px;margin:auto;background:#1a1a2e;padding:32px;border-radius:12px;">
+      <h2 style="color:#6c63ff;">Project Access Granted</h2>
+      <p style="color:#e8e8f0;">
+        ${inviterName} added you to <b>${projectName}</b> as <b>${role}</b>.
+      </p>
+    </div>
+  `;
 
-  await transporter.sendMail(mailOptions);
+  await sendEmail(to, `Added to ${projectName}`, html);
 };
 
+/**
+ * Task Assignment Email
+ */
 exports.sendTaskAssignmentEmail = async (to, assignerName, taskTitle, projectName) => {
-  const mailOptions = {
-    from: process.env.EMAIL_FROM || process.env.SMTP_USER,
-    to,
-    subject: `New task assigned: ${taskTitle}`,
-    html: `
-      <div style="font-family: 'Inter', Arial, sans-serif; max-width: 500px; margin: 0 auto; background: #1a1a2e; padding: 32px; border-radius: 12px;">
-        <h2 style="color: #6c63ff; margin-bottom: 16px;">New Task Assigned</h2>
-        <p style="color: #e8e8f0;">${assignerName} assigned you to <strong>${taskTitle}</strong> in <strong>${projectName}</strong>.</p>
-        <p style="color: #a0a0b8; font-size: 12px;">Open Webingo PM to view the updated task and progress.</p>
-      </div>
-    `,
-  };
+  const html = `
+    <div style="font-family: Arial; max-width:500px;margin:auto;background:#1a1a2e;padding:32px;border-radius:12px;">
+      <h2 style="color:#6c63ff;">New Task Assigned</h2>
+      <p style="color:#e8e8f0;">
+        ${assignerName} assigned you <b>${taskTitle}</b> in <b>${projectName}</b>.
+      </p>
+    </div>
+  `;
 
-  await transporter.sendMail(mailOptions);
+  await sendEmail(to, `New Task: ${taskTitle}`, html);
 };
 
+/**
+ * Task Status Change Email
+ */
 exports.sendTaskStatusChangeEmail = async (to, updaterName, taskTitle, status, projectName) => {
-  const mailOptions = {
-    from: process.env.EMAIL_FROM || process.env.SMTP_USER,
-    to,
-    subject: `Task status updated: ${taskTitle}`,
-    html: `
-      <div style="font-family: 'Inter', Arial, sans-serif; max-width: 500px; margin: 0 auto; background: #1a1a2e; padding: 32px; border-radius: 12px;">
-        <h2 style="color: #6c63ff; margin-bottom: 16px;">Task Status Changed</h2>
-        <p style="color: #e8e8f0;">${updaterName} changed the status of <strong>${taskTitle}</strong> to <strong>${status}</strong> in <strong>${projectName}</strong>.</p>
-        <p style="color: #a0a0b8; font-size: 12px;">Open Webingo PM to review the updated task.</p>
-      </div>
-    `,
-  };
+  const html = `
+    <div style="font-family: Arial; max-width:500px;margin:auto;background:#1a1a2e;padding:32px;border-radius:12px;">
+      <h2 style="color:#6c63ff;">Task Status Updated</h2>
+      <p style="color:#e8e8f0;">
+        ${updaterName} changed <b>${taskTitle}</b> to <b>${status}</b> in <b>${projectName}</b>.
+      </p>
+    </div>
+  `;
 
-  await transporter.sendMail(mailOptions);
+  await sendEmail(to, `Status Updated: ${taskTitle}`, html);
 };
 
+/**
+ * Email Verification
+ */
 exports.sendEmailVerificationEmail = async (to, verificationToken) => {
   const verificationUrl = `${process.env.CLIENT_URL}/verify-email/${verificationToken}`;
 
-  const mailOptions = {
-    from: process.env.EMAIL_FROM || process.env.SMTP_USER,
-    to,
-    subject: 'Verify Your Email - Webingo Project Management',
-    html: `
-      <div style="font-family: 'Inter', Arial, sans-serif; max-width: 500px; margin: 0 auto; background: #1a1a2e; padding: 32px; border-radius: 12px;">
-        <h2 style="color: #6c63ff; margin-bottom: 16px;">Verify Your Email</h2>
-        <p style="color: #e8e8f0;">Welcome to Webingo! Please verify your email address by clicking the button below:</p>
-        <a href="${verificationUrl}" style="display: inline-block; background: #6c63ff; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; margin: 16px 0; font-weight: 600;">Verify Email</a>
-        <p style="color: #a0a0b8; font-size: 12px;">This link expires in 1 minute. If you didn't create this account, ignore this email.</p>
-      </div>
-    `,
-  };
+  const html = `
+    <div style="font-family: Arial; max-width:500px;margin:auto;background:#1a1a2e;padding:32px;border-radius:12px;">
+      <h2 style="color:#6c63ff;">Verify Your Email</h2>
+      <p style="color:#e8e8f0;">Click below to verify your email:</p>
+      <a href="${verificationUrl}" style="display:inline-block;background:#6c63ff;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;">
+        Verify Email
+      </a>
+      <p style="color:#a0a0b8;font-size:12px;">This link expires in 1 minute.</p>
+    </div>
+  `;
 
-  await transporter.sendMail(mailOptions);
+  await sendEmail(to, "Verify Your Email - Webingo Project Management", html);
 };
