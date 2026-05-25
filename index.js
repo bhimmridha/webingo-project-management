@@ -1,70 +1,104 @@
-require('dotenv').config();
-const express = require('express');
-const http = require('http');
-const cors = require('cors');
-const helmet = require('helmet');
-const { Server } = require('socket.io');
-const connectDB = require('./config/db');
-const errorHandler = require('./middlewares/errorHandler');
+require("dotenv").config();
+const express = require("express");
+const http = require("http");
+const cors = require("cors");
+const helmet = require("helmet");
+const { Server } = require("socket.io");
+
+const connectDB = require("./config/db");
+const errorHandler = require("./middlewares/errorHandler");
 
 // Initialize app
 const app = express();
 const server = http.createServer(app);
 
-// Connect to Database
-connectDB();
-
-// Security Middlewares
+// --------------------
+// SECURITY + MIDDLEWARE
+// --------------------
 app.use(helmet());
-app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:3000',
-  credentials: true,
-}));
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Trust proxy (for rate limiting behind reverse proxy)
-app.set('trust proxy', 1);
+const CLIENT_URL = "https://webingo-project-management.vercel.app";
 
-// Socket.io Setup
+app.use(
+  cors({
+    origin: CLIENT_URL,
+    credentials: true,
+  })
+);
+
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+
+app.set("trust proxy", 1);
+
+// --------------------
+// SOCKET.IO SETUP
+// --------------------
 const io = new Server(server, {
   cors: {
-    origin: process.env.CLIENT_URL || 'http://localhost:3000',
-    methods: ['GET', 'POST'],
+    origin: CLIENT_URL,
     credentials: true,
   },
+  transports: ["polling", "websocket"], // IMPORTANT for Render
 });
 
-// Pass io to request object for controllers
+// Debug socket errors
+io.engine.on("connection_error", (err) => {
+  console.log("❌ Socket connection error:", err.message);
+});
+
+// Connection handler
+io.on("connection", (socket) => {
+  console.log("🟢 User connected:", socket.id);
+
+  socket.on("disconnect", () => {
+    console.log("🔴 User disconnected:", socket.id);
+  });
+});
+
+// Make io available in routes
 app.use((req, res, next) => {
   req.io = io;
   next();
 });
 
-// Health check
-app.get('/health', (req, res) => {
-  res.json({ status: 'OK', timestamp: new Date().toISOString() });
+// --------------------
+// ROUTES
+// --------------------
+app.get("/health", (req, res) => {
+  res.json({
+    status: "OK",
+    timestamp: new Date().toISOString(),
+  });
 });
 
-// API Routes
-app.use('/api/auth', require('./routes/authRoutes'));
-app.use('/api/projects', require('./routes/projectRoutes'));
-app.use('/api/tasks', require('./routes/taskRoutes'));
+app.use("/api/auth", require("./routes/authRoutes"));
+app.use("/api/projects", require("./routes/projectRoutes"));
+app.use("/api/tasks", require("./routes/taskRoutes"));
 
-// 404 handler
+// 404
 app.use((req, res) => {
-  res.status(404).json({ message: `Route ${req.originalUrl} not found` });
+  res.status(404).json({
+    message: `Route ${req.originalUrl} not found`,
+  });
 });
 
-// Socket.io event handlers
-require('./services/socketService')(io);
-
-// Centralized Error Handling Middleware (must be last)
+// Error handler (last)
 app.use(errorHandler);
 
+// --------------------
+// START SERVER (FIXED IMPORTANT PART)
+// --------------------
 const PORT = process.env.PORT || 5000;
-server.listen(PORT, () => {
-  console.log(`✅ Server running on port ${PORT} in ${process.env.NODE_ENV || 'development'} mode`);
-});
+
+connectDB()
+  .then(() => {
+    server.listen(PORT, () => {
+      console.log(`✅ Server running on port ${PORT}`);
+    });
+  })
+  .catch((err) => {
+    console.error("❌ Database connection failed:", err);
+  });
 
 module.exports = { app, server };
